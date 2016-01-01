@@ -20,6 +20,10 @@ import (
     "sort"
 )
 
+// VoidSection is returned by GetSection so that subsequent calls to GetVal
+// can be made without nil checking.
+var VoidSection = newIniSection("void")
+
 // AddValue adds a new IniValue object for the given key and value strings
 // to the IniSection instance.
 func (this *IniSection) AddValue(key, value string) {
@@ -62,7 +66,7 @@ func (this *IniSection) GetFirstVal(valName string) *IniValue {
     vals := this.GetVals(valName)
 
     if len(vals) < 1 {
-        return nil
+        return VoidValue
     }
 
     return vals[0]
@@ -76,7 +80,7 @@ func (this *IniSection) GetVals(valName string) []*IniValue {
         return vals
     }
 
-    return nil
+    return make([]*IniValue, 0)
 }
 
 // String prints a human-readable representation of the IniSection and

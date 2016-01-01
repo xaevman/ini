@@ -23,7 +23,6 @@ import (
     "strings"
 )
 
-
 // GetSection returns a pointer to the requested IniSection object, or nil
 // if an IniSection object with that name is not present within the configuration
 func (this *IniCfg) GetSection(sectionName string) *IniSection {
@@ -32,7 +31,7 @@ func (this *IniCfg) GetSection(sectionName string) *IniSection {
         return val
     }
 
-    return nil
+    return VoidSection
 }
 
 // Reparse forces a config file to be re-read and all IniSections and

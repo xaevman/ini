@@ -19,6 +19,10 @@ import (
     "strings"
 )
 
+// VoidValue is returned by GetFirstValue so that subsequent calls to GetValx
+// can be made without nil checking.
+var VoidValue = newIniValue("void", "")
+
 // GetValBool retrieves the value at the given offset and attempts to parse
 // and return it as a boolean value. If either the offset is invalid, or
 // parsing fails, the supplied default value is returned.
