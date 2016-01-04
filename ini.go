@@ -15,10 +15,18 @@
 package ini
 
 import (
+    "github.com/xaevman/crash"
+
     "path"
     "regexp"
     "strings"
+    "time"
 )
+
+// DefaultPollFreqSec is the default amount of time, in seconds,
+// that the ini system will wait between checks to see if a given
+// ini file has changed.
+const DefaultPollFreqSec = 10
 
 // Regex to parse lines containing section definitions.
 const sectionRegexFmt = "^\\s*\\[(.*)\\]\\s*$"
@@ -26,7 +34,7 @@ const sectionRegexFmt = "^\\s*\\[(.*)\\]\\s*$"
 // Regex to parse key/value lines.
 const keyvalRegexFmt  = "^\\s*(.*)\\s*=\\s*(.*)\\s*$"
 
-// Shared regexp objects
+// Shared regexp objects.
 var (
     secRegexp    = regexp.MustCompile(sectionRegexFmt)
     keyvalRegexp = regexp.MustCompile(keyvalRegexFmt)
@@ -41,6 +49,7 @@ type IniCfg struct {
     ConfigVer string
     Name      string
     Path      string
+    ModTime   time.Time
     Sections  map[string]*IniSection
 
     keys      []string
@@ -130,3 +139,12 @@ func cleanIniToken(token string) string {
     return clean
 }
 
+// init initializes the ini package. Primarily, it spawns a goroutine
+// which is responsible for handling ini change monitoring.
+func init() {
+    SetPollFreqSec(DefaultPollFreqSec)
+    go func() {
+        defer crash.HandleAll()
+        monitorInis()
+    }()
+}

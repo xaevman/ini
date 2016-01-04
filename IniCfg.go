@@ -102,6 +102,13 @@ func (this *IniCfg) parseConfig() {
         return
     }
 
+    info, err :=  os.Stat(this.Path)
+    if err != nil {
+        return
+    }
+
+    this.ModTime = info.ModTime()
+
     defer f.Close()
 
     var curSection *IniSection
