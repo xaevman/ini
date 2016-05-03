@@ -32,7 +32,7 @@ const DefaultPollFreqSec = 10
 const sectionRegexFmt = "^\\s*\\[(.*)\\]\\s*$"
 
 // Regex to parse key/value lines.
-const keyvalRegexFmt  = "^\\s*(.*)\\s*=\\s*(.*)\\s*$"
+const keyvalRegexFmt  = "^\\s*(.*?)\\s*=\\s*(.*?)\\s*$"
 
 // Shared regexp objects.
 var (

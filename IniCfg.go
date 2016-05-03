@@ -101,6 +101,7 @@ func (this *IniCfg) parseConfig() {
     if err != nil {
         return
     }
+    defer f.Close()
 
     info, err :=  os.Stat(this.Path)
     if err != nil {
@@ -108,8 +109,6 @@ func (this *IniCfg) parseConfig() {
     }
 
     this.ModTime = info.ModTime()
-
-    defer f.Close()
 
     var curSection *IniSection
     scanner        := bufio.NewScanner(f)
@@ -120,7 +119,9 @@ func (this *IniCfg) parseConfig() {
         }
 
         line := strings.TrimSpace(scanner.Text())
-        if len(line) < 1 || strings.HasPrefix(line, "#") {
+        if len(line) < 1 || 
+            strings.HasPrefix(line, "#") || 
+            strings.HasPrefix(line, ";") {
             continue
         }
 
