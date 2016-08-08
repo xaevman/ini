@@ -2,7 +2,7 @@
 //
 //  iniMonitor.go
 //
-//  Copyright (c) 2015, Jared Chavez. 
+//  Copyright (c) 2015, Jared Chavez.
 //  All rights reserved.
 //
 //  Use of this source code is governed by a BSD-style
@@ -24,7 +24,6 @@ var (
     monitors    map[string]*monIni
     monitorLock sync.Mutex
     pollFreqSec uint32
-
 )
 
 type monIni struct {
@@ -58,16 +57,16 @@ func SetPollFreqSec(freqSec uint32) {
 // Subscribe notifies the ini system that the given callback should be called
 // upon any changes to the given ini file.
 func Subscribe(cfg *IniCfg, callback func(*IniCfg, int)) uint32 {
-    newId  := atomic.AddUint32(&coreId, 1)
+    newId := atomic.AddUint32(&coreId, 1)
 
     monitorLock.Lock()
     defer monitorLock.Unlock()
 
     mon := getMonIni(cfg)
 
-    sub := &monSubscriber {
-        callback : callback,
-        id       : newId,
+    sub := &monSubscriber{
+        callback: callback,
+        id:       newId,
     }
 
     mon.subscribers[sub.id] = sub
@@ -94,15 +93,15 @@ func getMonIni(cfg *IniCfg) *monIni {
         monitors = make(map[string]*monIni)
     }
 
-    mon, ok := monitors[cfg.Name]
+    mon, ok := monitors[cfg.Path]
     if !ok {
-        mon = &monIni {
-            name        : cfg.Name,
-            iniFile     : cfg,
-            subscribers : make(map[uint32]*monSubscriber),
+        mon = &monIni{
+            name:        cfg.Path,
+            iniFile:     cfg,
+            subscribers: make(map[uint32]*monSubscriber),
         }
 
-        monitors[cfg.Name] = mon
+        monitors[cfg.Path] = mon
     }
 
     return mon
@@ -116,8 +115,8 @@ func monitorInis() {
     for {
         monitorLock.Lock()
 
-        for k1, _ := range monitors {
-            mon       := monitors[k1]
+        for k1 := range monitors {
+            mon := monitors[k1]
             info, err := os.Stat(mon.iniFile.Path)
             if err != nil {
                 continue
@@ -125,7 +124,7 @@ func monitorInis() {
 
             // file hasn't been written to
             if mon.iniFile.ModTime.After(info.ModTime()) ||
-               mon.iniFile.ModTime.Equal(info.ModTime()) {
+                mon.iniFile.ModTime.Equal(info.ModTime()) {
                 continue
             }
 
@@ -134,7 +133,7 @@ func monitorInis() {
             mon.iniFile.Reparse()
 
             // notify
-            for k2, _ := range mon.subscribers {
+            for k2 := range mon.subscribers {
                 sub := mon.subscribers[k2]
                 sub.callback(mon.iniFile, mon.changeCount)
             }
