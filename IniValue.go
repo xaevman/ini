@@ -2,7 +2,7 @@
 //
 //  IniValue.go
 //
-//  Copyright (c) 2015, Jared Chavez. 
+//  Copyright (c) 2015, Jared Chavez.
 //  All rights reserved.
 //
 //  Use of this source code is governed by a BSD-style
@@ -103,11 +103,15 @@ func (this *IniValue) GetValInt64(offset int, defVal int64) int64 {
     return iVal
 }
 
-// GetValStr retrieves the value at the given offset and returns it as a 
+// GetValStr retrieves the value at the given offset and returns it as a
 // string value. If teh offset is invalid the supplied default value is
 // returned.
 func (this *IniValue) GetValStr(offset int, defVal string) string {
     if offset >= len(this.Values) {
+        return defVal
+    }
+
+    if this.Values[offset] == "" {
         return defVal
     }
 
@@ -151,7 +155,7 @@ func (this *IniValue) GetValUint64(offset int, defVal uint64) uint64 {
 func (this *IniValue) String() string {
     var buf bytes.Buffer
     buf.WriteString(fmt.Sprintf(
-        "[Key: %s", 
+        "[Key: %s",
         this.Name,
     ))
 
@@ -176,8 +180,8 @@ func (this *IniValue) parseValues(valstring string) {
     valstring = stripEOLComment(valstring)
 
     // parse out delimiters
-    valparts   := strings.Split(valstring, ",")
-    this.Values = make([]string, len(valparts)) 
+    valparts := strings.Split(valstring, ",")
+    this.Values = make([]string, len(valparts))
 
     for i := range valparts {
         this.Values[i] = strings.TrimSpace(valparts[i])
