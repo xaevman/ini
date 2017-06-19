@@ -13,98 +13,98 @@
 package ini
 
 import (
-    "os"
-    "sync"
-    "sync/atomic"
-    "time"
+	"os"
+	"sync"
+	"sync/atomic"
+	"time"
 )
 
 var (
-    coreId      uint32
-    monitors    map[string]*monIni
-    monitorLock sync.Mutex
-    pollFreqSec uint32
+	coreId      uint32
+	monitors    map[string]*monIni
+	monitorLock sync.Mutex
+	pollFreqSec uint32
 )
 
 type monIni struct {
-    changeCount int
-    iniFile     *IniCfg
-    name        string
-    subscribers map[uint32]*monSubscriber
+	changeCount int
+	iniFile     *IniCfg
+	name        string
+	subscribers map[uint32]*monSubscriber
 }
 
 type monSubscriber struct {
-    callback func(*IniCfg, int)
-    id       uint32
+	callback func(*IniCfg, int)
+	id       uint32
 }
 
 // ClearSubscribers clears the list of subscriber functions for the given
 // ini file.
 func ClearSubscribers(cfg *IniCfg) {
-    monitorLock.Lock()
-    defer monitorLock.Unlock()
+	monitorLock.Lock()
+	defer monitorLock.Unlock()
 
-    mon := getMonIni(cfg)
-    mon.subscribers = make(map[uint32]*monSubscriber)
+	mon := getMonIni(cfg)
+	mon.subscribers = make(map[uint32]*monSubscriber)
 }
 
 // SetPollFreqSec sets the frequency at which the underlying ini file is
 // checked for changes.
 func SetPollFreqSec(freqSec uint32) {
-    atomic.StoreUint32(&pollFreqSec, freqSec)
+	atomic.StoreUint32(&pollFreqSec, freqSec)
 }
 
 // Subscribe notifies the ini system that the given callback should be called
 // upon any changes to the given ini file.
 func Subscribe(cfg *IniCfg, callback func(*IniCfg, int)) uint32 {
-    newId := atomic.AddUint32(&coreId, 1)
+	newId := atomic.AddUint32(&coreId, 1)
 
-    monitorLock.Lock()
-    defer monitorLock.Unlock()
+	monitorLock.Lock()
+	defer monitorLock.Unlock()
 
-    mon := getMonIni(cfg)
+	mon := getMonIni(cfg)
 
-    sub := &monSubscriber{
-        callback: callback,
-        id:       newId,
-    }
+	sub := &monSubscriber{
+		callback: callback,
+		id:       newId,
+	}
 
-    mon.subscribers[sub.id] = sub
+	mon.subscribers[sub.id] = sub
 
-    callback(mon.iniFile, 0)
+	callback(mon.iniFile, 0)
 
-    return newId
+	return newId
 }
 
 // Unsubscribe removes the callback identified by id from the list of
 // subscribers for the given ini file.
 func Unsubscribe(cfg *IniCfg, id uint32) {
-    monitorLock.Lock()
-    defer monitorLock.Unlock()
+	monitorLock.Lock()
+	defer monitorLock.Unlock()
 
-    mon := getMonIni(cfg)
-    delete(mon.subscribers, id)
+	mon := getMonIni(cfg)
+	delete(mon.subscribers, id)
 }
 
 // getMonIni creates, or gets, a monIni object for tracking callbacks
 // associated with the given ini file.
 func getMonIni(cfg *IniCfg) *monIni {
-    if monitors == nil {
-        monitors = make(map[string]*monIni)
-    }
+	if monitors == nil {
+		monitors = make(map[string]*monIni)
+	}
 
-    mon, ok := monitors[cfg.Path]
-    if !ok {
-        mon = &monIni{
-            name:        cfg.Path,
-            iniFile:     cfg,
-            subscribers: make(map[uint32]*monSubscriber),
-        }
+	mon, ok := monitors[cfg.Path]
+	if !ok {
+		mon = &monIni{
+			name:        cfg.Path,
+			iniFile:     cfg,
+			subscribers: make(map[uint32]*monSubscriber),
+		}
 
-        monitors[cfg.Path] = mon
-    }
+		monitors[cfg.Path] = mon
+	}
 
-    return mon
+	return mon
 }
 
 // monitorInis is executed within a separate goroutine to periodically
@@ -112,35 +112,41 @@ func getMonIni(cfg *IniCfg) *monIni {
 // ModTime with the last recorded ModTime (at the time the file was last
 // parsed). If changes are detected, all subscribed callbacks are called.
 func monitorInis() {
-    for {
-        monitorLock.Lock()
+	defer iniShutdown.Complete()
 
-        for k1 := range monitors {
-            mon := monitors[k1]
-            info, err := os.Stat(mon.iniFile.Path)
-            if err != nil {
-                continue
-            }
+	for {
+		monitorLock.Lock()
 
-            // file hasn't been written to
-            if mon.iniFile.ModTime.After(info.ModTime()) ||
-                mon.iniFile.ModTime.Equal(info.ModTime()) {
-                continue
-            }
+		for k1 := range monitors {
+			mon := monitors[k1]
+			info, err := os.Stat(mon.iniFile.Path)
+			if err != nil {
+				continue
+			}
 
-            // something has changed - reparse
-            mon.changeCount++
-            mon.iniFile.Reparse()
+			// file hasn't been written to
+			if mon.iniFile.ModTime.After(info.ModTime()) ||
+				mon.iniFile.ModTime.Equal(info.ModTime()) {
+				continue
+			}
 
-            // notify
-            for k2 := range mon.subscribers {
-                sub := mon.subscribers[k2]
-                sub.callback(mon.iniFile, mon.changeCount)
-            }
-        }
+			// something has changed - reparse
+			mon.changeCount++
+			mon.iniFile.Reparse()
 
-        monitorLock.Unlock()
+			// notify
+			for k2 := range mon.subscribers {
+				sub := mon.subscribers[k2]
+				sub.callback(mon.iniFile, mon.changeCount)
+			}
+		}
 
-        <-time.After(time.Duration(atomic.LoadUint32(&pollFreqSec)) * time.Second)
-    }
+		monitorLock.Unlock()
+
+		select {
+		case <-time.After(time.Duration(atomic.LoadUint32(&pollFreqSec)) * time.Second):
+		case <-iniShutdown.Signal:
+			return
+		}
+	}
 }
