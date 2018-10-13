@@ -53,6 +53,7 @@ type IniCfg struct {
 	Path      string
 	ModTime   time.Time
 	Sections  map[string]*IniSection
+	Raw       string
 
 	keys []string
 }
