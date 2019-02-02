@@ -20,10 +20,11 @@ import (
 )
 
 var (
-	coreId      uint32
-	monitors    map[string]*monIni
-	monitorLock sync.Mutex
-	pollFreqSec uint32
+	coreId          uint32
+	forceUpdateChan = make(chan interface{}, 0)
+	monitors        map[string]*monIni
+	monitorLock     sync.Mutex
+	pollFreqSec     uint32
 )
 
 type monIni struct {
@@ -46,6 +47,11 @@ func ClearSubscribers(cfg *IniCfg) {
 
 	mon := getMonIni(cfg)
 	mon.subscribers = make(map[uint32]*monSubscriber)
+}
+
+// ForceUpdate cause an ini poll to happen via manual request.
+func ForceUpdate() {
+	forceUpdateChan <- nil
 }
 
 // SetPollFreqSec sets the frequency at which the underlying ini file is
@@ -144,6 +150,7 @@ func monitorInis() {
 		monitorLock.Unlock()
 
 		select {
+		case <-forceUpdateChan:
 		case <-time.After(time.Duration(atomic.LoadUint32(&pollFreqSec)) * time.Second):
 		case <-iniShutdown.Signal:
 			return
