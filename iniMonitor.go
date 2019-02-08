@@ -21,7 +21,7 @@ import (
 
 var (
 	coreId          uint32
-	forceUpdateChan = make(chan interface{}, 0)
+	forceUpdateChan = make(chan chan interface{}, 0)
 	monitors        map[string]*monIni
 	monitorLock     sync.Mutex
 	pollFreqSec     uint32
@@ -51,7 +51,9 @@ func ClearSubscribers(cfg *IniCfg) {
 
 // ForceUpdate cause an ini poll to happen via manual request.
 func ForceUpdate() {
-	forceUpdateChan <- nil
+	reply := make(chan interface{}, 0)
+	forceUpdateChan <- reply
+	<-reply
 }
 
 // SetPollFreqSec sets the frequency at which the underlying ini file is
@@ -113,6 +115,39 @@ func getMonIni(cfg *IniCfg) *monIni {
 	return mon
 }
 
+// checkInits locks the monitor list and does the work of detecting
+// config changes and running the registered callbacks in the event
+// that a relevant config file has been changed.
+func checkInis() {
+	monitorLock.Lock()
+
+	for k1 := range monitors {
+		mon := monitors[k1]
+		info, err := os.Stat(mon.iniFile.Path)
+		if err != nil {
+			continue
+		}
+
+		// file hasn't been written to
+		if mon.iniFile.ModTime.After(info.ModTime()) ||
+			mon.iniFile.ModTime.Equal(info.ModTime()) {
+			continue
+		}
+
+		// something has changed - reparse
+		mon.changeCount++
+		mon.iniFile.Reparse()
+
+		// notify
+		for k2 := range mon.subscribers {
+			sub := mon.subscribers[k2]
+			sub.callback(mon.iniFile, mon.changeCount)
+		}
+	}
+
+	monitorLock.Unlock()
+}
+
 // monitorInis is executed within a separate goroutine to periodically
 // stat monitored ini files. Changes are detected by comparing an ini file's
 // ModTime with the last recorded ModTime (at the time the file was last
@@ -121,37 +156,16 @@ func monitorInis() {
 	defer iniShutdown.Complete()
 
 	for {
-		monitorLock.Lock()
-
-		for k1 := range monitors {
-			mon := monitors[k1]
-			info, err := os.Stat(mon.iniFile.Path)
-			if err != nil {
-				continue
-			}
-
-			// file hasn't been written to
-			if mon.iniFile.ModTime.After(info.ModTime()) ||
-				mon.iniFile.ModTime.Equal(info.ModTime()) {
-				continue
-			}
-
-			// something has changed - reparse
-			mon.changeCount++
-			mon.iniFile.Reparse()
-
-			// notify
-			for k2 := range mon.subscribers {
-				sub := mon.subscribers[k2]
-				sub.callback(mon.iniFile, mon.changeCount)
-			}
-		}
-
-		monitorLock.Unlock()
-
 		select {
-		case <-forceUpdateChan:
+		case replyChan := <-forceUpdateChan:
+			checkInis()
+			if replyChan != nil {
+				close(replyChan)
+			}
+
 		case <-time.After(time.Duration(atomic.LoadUint32(&pollFreqSec)) * time.Second):
+			checkInis()
+
 		case <-iniShutdown.Signal:
 			return
 		}
