@@ -156,5 +156,6 @@ func init() {
 	go func() {
 		defer crash.HandleAll()
 		monitorInis()
+		ForceUpdate()
 	}()
 }

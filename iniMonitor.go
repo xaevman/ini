@@ -115,7 +115,7 @@ func getMonIni(cfg *IniCfg) *monIni {
 	return mon
 }
 
-// checkInits locks the monitor list and does the work of detecting
+// checkInis locks the monitor list and does the work of detecting
 // config changes and running the registered callbacks in the event
 // that a relevant config file has been changed.
 func checkInis() {
