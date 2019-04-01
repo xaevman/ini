@@ -101,15 +101,15 @@ func getMonIni(cfg *IniCfg) *monIni {
 		monitors = make(map[string]*monIni)
 	}
 
-	mon, ok := monitors[cfg.Path]
+	mon, ok := monitors[cfg.Name]
 	if !ok {
 		mon = &monIni{
-			name:        cfg.Path,
+			name:        cfg.Name,
 			iniFile:     cfg,
 			subscribers: make(map[uint32]*monSubscriber),
 		}
 
-		monitors[cfg.Path] = mon
+		monitors[cfg.Name] = mon
 	}
 
 	return mon
@@ -122,26 +122,35 @@ func checkInis() {
 	monitorLock.Lock()
 
 	for k1 := range monitors {
+		changesDetected := false
+
 		mon := monitors[k1]
-		info, err := os.Stat(mon.iniFile.Path)
-		if err != nil {
-			continue
+		for iniFilePathIndex, iniFilePath := range mon.iniFile.Paths {
+			info, err := os.Stat(iniFilePath)
+			if err != nil {
+				continue
+			}
+
+			// file hasn't been written to
+			if mon.iniFile.ModTimes[iniFilePathIndex].After(info.ModTime()) ||
+				mon.iniFile.ModTimes[iniFilePathIndex].Equal(info.ModTime()) {
+				continue
+			}
+
+			// The file has been written to; this configuration's subscribers should be notified.
+			changesDetected = true
 		}
 
-		// file hasn't been written to
-		if mon.iniFile.ModTime.After(info.ModTime()) ||
-			mon.iniFile.ModTime.Equal(info.ModTime()) {
-			continue
-		}
+		if changesDetected {
+			// something has changed - reparse
+			mon.changeCount++
+			mon.iniFile.Reparse()
 
-		// something has changed - reparse
-		mon.changeCount++
-		mon.iniFile.Reparse()
-
-		// notify
-		for k2 := range mon.subscribers {
-			sub := mon.subscribers[k2]
-			sub.callback(mon.iniFile, mon.changeCount)
+			// notify
+			for k2 := range mon.subscribers {
+				sub := mon.subscribers[k2]
+				sub.callback(mon.iniFile, mon.changeCount)
+			}
 		}
 	}
 

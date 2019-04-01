@@ -43,18 +43,22 @@ var (
 
 var iniShutdown = shutdown.New()
 
-// IniCfg represents a single ini configuration file, containing pointers
+// IniCfg represents a single virtual ini configuration file, containing pointers
 // to the IniSections contained within it. ConfigVer is a consistent hash
 // of all IniSections within the file which is not influenced by whitespace
 // or comments.
 type IniCfg struct {
 	ConfigVer string
 	Name      string
-	Path      string
-	ModTime   time.Time
-	Sections  map[string]*IniSection
-	Raw       string
 
+	// Paths is the set of all ini file paths contributing to the configuration.
+	// ModTimes are the corresponding modification times of each of those files.
+	// Raws are the similarly corresponding raw content of those files.
+	Paths     []string
+	ModTimes  []time.Time
+	Raws      []string
+
+	Sections  map[string]*IniSection
 	keys []string
 }
 
@@ -100,14 +104,31 @@ func Shutdown() {
 
 // newIniCfg returns a pointer to a new IniCfg object for the given file path.
 func newIniCfg(iniPath string) *IniCfg {
+	return newIniCfgFromFiles([]string{iniPath})
+}
+
+// newIniCfgFromFiles returns a pointer to a new IniCfg object for the files at the given path.
+// Values from multiple files are merged together so that the resulting IniCfg appears to be a single
+// construct. Values from later files overwrite those from earlier files.
+//
+// This function returns nil if an empty array of paths is provided.
+func newIniCfgFromFiles(iniFiles []string) *IniCfg {
+	if (len(iniFiles) == 0) {
+		return nil
+	}
+
+	primaryFile := iniFiles[0]
+
 	iniName := strings.TrimSuffix(
-		path.Base(iniPath),
-		path.Ext(iniPath),
+		path.Base(primaryFile),
+		path.Ext(primaryFile),
 	)
 
 	cfg := IniCfg{
 		Name: iniName,
-		Path: iniPath,
+		Paths: iniFiles,
+		ModTimes: make([]time.Time, len(iniFiles)),
+		Raws: make([]string, len(iniFiles)),
 	}
 
 	cfg.Reparse()
