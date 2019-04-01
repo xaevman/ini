@@ -84,6 +84,22 @@ func TestIniMonitor(t *testing.T) {
     }
 }
 
+func TestIniMonitorOnSecondFile(t *testing.T) {
+    cfg := newIniCfgFromFiles([]string{"./test.ini", "./test2.ini"})
+    Subscribe(cfg, onCfgChange)
+    err := touch(cfg.Paths[1])
+    if err != nil {
+        t.Fatal(err)
+    }
+    
+    select {
+    case <-stopTest:
+        t.Log("Config change notified successfully")
+    case <-time.After(2 * time.Second):
+        t.Fatal("Config change notification not received after 2 seconds")
+    }
+}
+
 func onCfgChange(cfg *IniCfg, changeCount int) {
     stopTest<- true
 }
