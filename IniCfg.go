@@ -44,7 +44,7 @@ func (this *IniCfg) Reparse() {
 	this.computeHash()
 }
 
-// RawString prints the ini file exactly as read in from disk,
+// RawString prints the ini files exactly as read in from disk,
 // along with last write time and file hash.
 func (this *IniCfg) RawString() string {
 	var buf bytes.Buffer
@@ -54,14 +54,15 @@ func (this *IniCfg) RawString() string {
 		this.ConfigVer,
 	))
 
-	buf.WriteString(fmt.Sprintf(
-		"LastWriteTime: %s\n", this.ModTime,
-	))
-
-	buf.WriteString("====================================================================\n\n")
-
-	buf.WriteString(this.Raw)
-
+	for index, path := range this.Paths {
+		buf.WriteString(fmt.Sprintf(
+			"File: %s\nLastWriteTime: %s\n", path, this.ModTimes[index],
+		))
+	
+		buf.WriteString("====================================================================\n\n")
+	
+		buf.WriteString(this.Raws[index])
+	}
 	return buf.String()
 }
 
@@ -75,9 +76,11 @@ func (this *IniCfg) String() string {
 		this.ConfigVer,
 	))
 
-	buf.WriteString(fmt.Sprintf(
-		"LastWriteTime: %s\n", this.ModTime,
-	))
+	for index, path := range this.Paths {
+		buf.WriteString(fmt.Sprintf(
+			"File: %s\nLastWriteTime: %s\n", path, this.ModTimes[index],
+		))
+	}
 
 	for i := range this.keys {
 		buf.WriteString(this.Sections[this.keys[i]].String())
@@ -122,61 +125,63 @@ func (this *IniCfg) getSection(sectionName string) *IniSection {
 // parseConfig opens the ini file, parses its sections and key/val
 // pairs, and recomputes hashes for all IniSections.
 func (this *IniCfg) parseConfig() {
-	f, err := os.Open(this.Path)
-	if err != nil {
-		return
+	for iniFilePathIndex, iniFilePath := range this.Paths {
+		f, err := os.Open(iniFilePath)
+		if err != nil {
+			return
+		}
+		defer f.Close()
+
+		info, err := os.Stat(iniFilePath)
+		if err != nil {
+			return
+		}
+
+		this.ModTimes[iniFilePathIndex] = info.ModTime()
+
+		var curSection *IniSection
+		scanner := bufio.NewScanner(f)
+
+		var buf bytes.Buffer
+
+		for scanner.Scan() {
+			if scanner.Err() != nil {
+				break
+			}
+
+			line := strings.TrimSpace(scanner.Text())
+			buf.WriteString(fmt.Sprintf("%s\n", line))
+
+			if len(line) < 1 ||
+				strings.HasPrefix(line, "#") ||
+				strings.HasPrefix(line, ";") {
+				continue
+			}
+
+			section := secRegexp.FindStringSubmatch(line)
+			if len(section) > 0 && curSection == nil {
+				// new section
+				curSection = this.getSection(section[1])
+			} else if len(section) > 0 && curSection != nil {
+				// next section
+				curSection = this.getSection(section[1])
+			} else if curSection == nil {
+				// orphaned lines
+				continue
+			}
+
+			// poorly formatted lines
+			keyval := keyvalRegexp.FindStringSubmatch(line)
+			if len(keyval) < 1 {
+				continue
+			}
+
+			// curSection keyval
+			curSection.AddValue(keyval[1], keyval[2])
+		}
+
+		this.Raws[iniFilePathIndex] = string(buf.Bytes())
 	}
-	defer f.Close()
-
-	info, err := os.Stat(this.Path)
-	if err != nil {
-		return
-	}
-
-	this.ModTime = info.ModTime()
-
-	var curSection *IniSection
-	scanner := bufio.NewScanner(f)
-
-	var buf bytes.Buffer
-
-	for scanner.Scan() {
-		if scanner.Err() != nil {
-			break
-		}
-
-		line := strings.TrimSpace(scanner.Text())
-		buf.WriteString(fmt.Sprintf("%s\n", line))
-
-		if len(line) < 1 ||
-			strings.HasPrefix(line, "#") ||
-			strings.HasPrefix(line, ";") {
-			continue
-		}
-
-		section := secRegexp.FindStringSubmatch(line)
-		if len(section) > 0 && curSection == nil {
-			// new section
-			curSection = this.getSection(section[1])
-		} else if len(section) > 0 && curSection != nil {
-			// next section
-			curSection = this.getSection(section[1])
-		} else if curSection == nil {
-			// orphaned lines
-			continue
-		}
-
-		// poorly formatted lines
-		keyval := keyvalRegexp.FindStringSubmatch(line)
-		if len(keyval) < 1 {
-			continue
-		}
-
-		// curSection keyval
-		curSection.AddValue(keyval[1], keyval[2])
-	}
-
-	this.Raw = string(buf.Bytes())
 
 	// compute hash of each section
 	for i := range this.keys {
