@@ -95,6 +95,11 @@ func New(iniPath string) *IniCfg {
 	return newIniCfg(iniPath)
 }
 
+// NewFromFiles returns a pointer to a new IniCfg object for the files at the given paths.
+func NewFromFiles(iniFiles []string) *IniCfg {
+	return newIniCfgFromFiles(iniFiles)
+}
+
 func Shutdown() {
 	iniShutdown.Start()
 	if iniShutdown.WaitForTimeout() {
