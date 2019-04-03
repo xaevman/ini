@@ -1,5 +1,8 @@
 # ini
 
+## Build Status
+[![Build Status](https://travis-ci.org/xaevman/ini.svg?branch=master)](https://travis-ci.org/xaevman/ini)
+
 ## Overview
 ini is a Go package which provides a basic object model of ini configuration files.
 
